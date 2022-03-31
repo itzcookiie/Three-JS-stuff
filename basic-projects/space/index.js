@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 
+const mouseCords = {
+    x: 0,
+    y: 0
+}
+
 const CUBE_COLOR = 0xFFFFFF; // white
 const CUBE_CONSTANT = 0.1;
 const CUBE_WIDTH = CUBE_CONSTANT;
@@ -13,25 +18,50 @@ const xRange = [-4, 4];
 const yRange = [-2, 2];
 const zRange = [-30, 0];
 
-function KeyWHandler(camera) {
+const keyCodeMapping = {
+    'KeyW': keyWHandler,
+    'KeyA': keyAHandler,
+    'KeyS': keySHandler,
+    'KeyD': keyDHandler
+};
+
+function keyWHandler(camera) {
     camera.position.z -= 0.05;
 }
-function KeyAHandler(camera) {
+function keyAHandler(camera) {
     camera.position.x -= 0.05;
 }
-function KeySHandler(camera) {
+function keySHandler(camera) {
     camera.position.z += 0.05;
 }
-function KeyDHandler(camera) {
+function keyDHandler(camera) {
     camera.position.x += 0.05;
 }
 
-const keyCodeMapping = {
-    'KeyW': KeyWHandler,
-    'KeyA': KeyAHandler,
-    'KeyS': KeySHandler,
-    'KeyD': KeyDHandler
+const keyEvents = {
+    mousedown: false,
+    mouseup: false
 };
+
+function handleMouseover(e, camera) {
+    if(keyEvents.mousedown) {
+        if(e.clientX < mouseCords.x) camera.rotation.x -= 0.01;
+        if(e.clientX > mouseCords.x) camera.rotation.x += 0.01;
+        if(e.clientY > mouseCords.y) camera.rotation.y += 0.01;
+        if(e.clientY < mouseCords.y) camera.rotation.y -= 0.01;
+    }
+}
+
+function handleMouseDownAndUp(e) {
+    if(e.type === 'mouseup') {
+        mouseCords.x = e.clientX;
+        mouseCords.y = e.clientY;
+    }
+
+    keyEvents[e.type] = true;
+    const otherKeyEvent = Object.keys(keyEvents).filter(keyEvent => keyEvent !== e.type);
+    keyEvents[otherKeyEvent] = false;
+}
 
 function main() {
     const renderer = new THREE.WebGLRenderer();
@@ -51,10 +81,17 @@ function main() {
     const animateCB = animateHOF(scene, camera, renderer, cubeObj);
     animateCB();
 
-    document.body.addEventListener('keypress', e => {
+    document.body.addEventListener('keydown', e => {
         const { code } = e;
         keyCodeMapping[code](camera);
     });
+    ['mousedown', 'mouseup'].forEach(
+        eventListener => document.body.addEventListener(eventListener, handleMouseDownAndUp)
+    )
+    document.body.addEventListener('mousemove', e => {
+        handleMouseover(e, camera);
+    })
+
 }
 
 main();
