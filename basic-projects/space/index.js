@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 const mouseCords = {
     x: 0,
@@ -18,6 +19,8 @@ const xRange = [-4, 4];
 const yRange = [-2, 2];
 const zRange = [-30, 0];
 
+let keyboardCode = undefined;
+
 const keyCodeMapping = {
     'KeyW': keyWHandler,
     'KeyA': keyAHandler,
@@ -26,16 +29,17 @@ const keyCodeMapping = {
 };
 
 function keyWHandler(camera) {
-    camera.position.z -= 0.05;
+    camera.translateZ(-0.05);
 }
 function keyAHandler(camera) {
-    camera.position.x -= 0.05;
+    camera.translateX(-0.05);
 }
 function keySHandler(camera) {
-    camera.position.z += 0.05;
+    camera.translateZ(0.05);
 }
 function keyDHandler(camera) {
-    camera.position.x += 0.05;
+    camera.translateX(0.05);
+
 }
 
 const keyEvents = {
@@ -45,15 +49,17 @@ const keyEvents = {
 
 function handleMouseover(e, camera) {
     if(keyEvents.mousedown) {
-        if(e.clientX < mouseCords.x) camera.rotation.x -= 0.01;
-        if(e.clientX > mouseCords.x) camera.rotation.x += 0.01;
-        if(e.clientY > mouseCords.y) camera.rotation.y += 0.01;
-        if(e.clientY < mouseCords.y) camera.rotation.y -= 0.01;
+        const deltaX = (e.clientX - mouseCords.x) / 1000;
+        const deltaY = (e.clientY - mouseCords.y) / 1000;
+        camera.rotation.x += deltaY;
+        camera.rotation.y += deltaX;
+        mouseCords.x = e.clientX;
+        mouseCords.y = e.clientY;
     }
 }
 
 function handleMouseDownAndUp(e) {
-    if(e.type === 'mouseup') {
+    if(e.type === 'mousedown') {
         mouseCords.x = e.clientX;
         mouseCords.y = e.clientY;
     }
@@ -69,6 +75,7 @@ function main() {
     document.body.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 1, 500);
+
     camera.position.set(0, 0, CAMERA_Z);
     camera.lookAt(0, 0, 0);
 
@@ -83,7 +90,10 @@ function main() {
 
     document.body.addEventListener('keydown', e => {
         const { code } = e;
-        keyCodeMapping[code](camera);
+        keyboardCode = code;
+    });
+    document.body.addEventListener('keyup', e => {
+        keyboardCode = undefined;
     });
     ['mousedown', 'mouseup'].forEach(
         eventListener => document.body.addEventListener(eventListener, handleMouseDownAndUp)
@@ -100,6 +110,7 @@ main();
 function animateHOF(scene, camera, renderer, cubeObj) {
     return function animate() {
         requestAnimationFrame( animate );
+        if(keyboardCode) keyCodeMapping[keyboardCode](camera);
         renderer.render( scene, camera );
 
         cubeObj.cubes.forEach(cube => {
