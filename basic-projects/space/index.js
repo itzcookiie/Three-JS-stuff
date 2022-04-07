@@ -1,10 +1,6 @@
 import * as THREE from 'three';
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 
-const mouseCords = {
-    x: 0,
-    y: 0
-}
 
 const CUBE_COLOR = 0xFFFFFF; // white
 const CUBE_CONSTANT = 0.1;
@@ -13,60 +9,51 @@ const CUBE_HEIGHT = CUBE_CONSTANT;
 const CUBE_DEPTH = CUBE_CONSTANT;
 const CUBES_NUMBER = 10;
 
+const ACCELERATION = 100.0;
+const DECELERATION = 10.0;
+
 const CAMERA_Z = 5;
 
 const xRange = [-4, 4];
 const yRange = [-2, 2];
 const zRange = [-30, 0];
 
-let keyboardCode = undefined;
+const velocity = new THREE.Vector3();
+const direction = new THREE.Vector3();
+
+let time = null;
+
+const moveConstants = {
+    left: 'left',
+    right: 'right',
+    forward: 'forward',
+    back: 'back'
+}
+
+const move = {
+    left: false,
+    right: false,
+    forward: false,
+    back: false
+};
 
 const keyCodeMapping = {
-    'KeyW': keyWHandler,
-    'KeyA': keyAHandler,
-    'KeyS': keySHandler,
-    'KeyD': keyDHandler
+    'KeyW': moveConstants.forward,
+    'KeyA': moveConstants.left,
+    'KeyS': moveConstants.back,
+    'KeyD': moveConstants.right
 };
 
-function keyWHandler(camera) {
-    camera.translateZ(-0.05);
-}
-function keyAHandler(camera) {
-    camera.translateX(-0.05);
-}
-function keySHandler(camera) {
-    camera.translateZ(0.05);
-}
-function keyDHandler(camera) {
-    camera.translateX(0.05);
-
+function handleMovement(e, moveDir) {
+    if(e.type === 'keydown') move[moveDir] = true;
+    if(e.type === 'keyup') move[moveDir] = false;
 }
 
-const keyEvents = {
-    mousedown: false,
-    mouseup: false
-};
-
-function handleMouseover(e, camera) {
-    if(keyEvents.mousedown) {
-        const deltaX = (e.clientX - mouseCords.x) / 1000;
-        const deltaY = (e.clientY - mouseCords.y) / 1000;
-        camera.rotation.x += deltaY;
-        camera.rotation.y += deltaX;
-        mouseCords.x = e.clientX;
-        mouseCords.y = e.clientY;
-    }
-}
-
-function handleMouseDownAndUp(e) {
-    if(e.type === 'mousedown') {
-        mouseCords.x = e.clientX;
-        mouseCords.y = e.clientY;
+function handleMouseDownAndUp(e, controls) {
+    if(e.button === 0) {
+        e.type === 'mousedown' ? controls.lock() : controls.unlock();
     }
 
-    keyEvents[e.type] = true;
-    const otherKeyEvent = Object.keys(keyEvents).filter(keyEvent => keyEvent !== e.type);
-    keyEvents[otherKeyEvent] = false;
 }
 
 function main() {
@@ -75,49 +62,60 @@ function main() {
     document.body.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 1, 500);
-
     camera.position.set(0, 0, CAMERA_Z);
     camera.lookAt(0, 0, 0);
 
     const scene = new THREE.Scene();
+    const controls = new PointerLockControls(camera, document.body);
+
     const cubeObj = createCubeObj(scene);
     generateCubesNTimes(cubeObj, 2000);
 
     // setInterval(() => generateCubes(), 2000);
 
-    const animateCB = animateHOF(scene, camera, renderer, cubeObj);
-    animateCB();
+    const animateCB = animateHOF(scene, camera, renderer, cubeObj, controls);
+    animateCB(null);
 
-    document.body.addEventListener('keydown', e => {
-        const { code } = e;
-        keyboardCode = code;
-    });
-    document.body.addEventListener('keyup', e => {
-        keyboardCode = undefined;
-    });
     ['mousedown', 'mouseup'].forEach(
-        eventListener => document.body.addEventListener(eventListener, handleMouseDownAndUp)
-    )
-    document.body.addEventListener('mousemove', e => {
-        handleMouseover(e, camera);
-    })
+        eventListener => document.body.addEventListener(eventListener, e => handleMouseDownAndUp(e, controls))
+    );
+    ['keydown', 'keyup'].forEach(
+        eventListener => document.body.addEventListener(eventListener, e => handleMovement(e, keyCodeMapping[e.code]))
+    );
+
+    window.addEventListener( 'resize', e => onWindowResize(camera, renderer));
 
 }
 
+// Make separate file and call this there. E.g. make file called App.js and move all this code there.
+// Then in this file, call this.
 main();
 
 
-function animateHOF(scene, camera, renderer, cubeObj) {
-    return function animate() {
+function animateHOF(scene, camera, renderer, cubeObj, controls) {
+    return function animate(timestamp) {
         requestAnimationFrame( animate );
-        if(keyboardCode) keyCodeMapping[keyboardCode](camera);
-        renderer.render( scene, camera );
 
-        cubeObj.cubes.forEach(cube => {
-            // cube.rotation.x += 0.01;
-            // cube.rotation.y += 0.01;
-            // cube.position.z += 0.01;
-        });
+        if (time) {
+            const delta = (timestamp - time) / 1000;
+
+            velocity.x -= velocity.x * DECELERATION * delta;
+            velocity.z -= velocity.z * DECELERATION * delta;
+
+            direction.z = Number( move.forward ) - Number( move.back );
+            direction.x = Number( move.right ) - Number( move.left );
+            direction.normalize(); // this ensures consistent movements in all directions
+
+            if ( move.forward || move.back ) velocity.z -= direction.z * ACCELERATION * delta;
+            if ( move.left || move.right ) velocity.x -= direction.x * ACCELERATION * delta;
+
+            camera.translateZ(  velocity.z * delta );
+            camera.translateX( - velocity.x * delta );
+
+            // controls.moveRight( - velocity.x * delta );
+            // controls.moveForward( - velocity.z * delta );
+
+        }
 
         // cubeObj.cubes.forEach(cube => {
         //     // cube.rotation.x += 0.01;
@@ -125,7 +123,20 @@ function animateHOF(scene, camera, renderer, cubeObj) {
         //     cube.position.z += 0.01;
         //     if(cube.position.z > CAMERA_Z) cube.remove();
         // });
+
+        time = timestamp;
+
+        renderer.render( scene, camera );
     }
+}
+
+function onWindowResize(camera, renderer) {
+
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize( window.innerWidth, window.innerHeight );
+
 }
 
 function createCubeObj(scene) {
@@ -163,8 +174,8 @@ function generateCubesNTimes(cubeObj, n) {
     });
 }
 
-function getRandomNumberFromArr(range) {
-    return getRandomNumber(range[0], range[1]);
+function getRandomNumberFromArr([x, y]) {
+    return getRandomNumber(x, y);
 }
 
 function getRandomNumber(min, max) {
