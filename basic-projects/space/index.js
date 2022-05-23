@@ -12,11 +12,34 @@ const CUBES_NUMBER = 10;
 const ACCELERATION = 100.0;
 const DECELERATION = 10.0;
 
-const CAMERA_Z = 5;
+const CAMERA_Z = 0;  // -15 is threshold point
 
-const xRange = [-4, 4];
+const xRange = [-15, 0];
 const yRange = [-2, 2];
 const zRange = [-30, 0];
+
+const area = {  // Use for calculating threshold points to detect when to create new objects on screen
+    FL: {  // Forward left. Represents left view completely including + 1/2y and -1/2y above and below
+        xRange: [-15, 0],
+        yRange: [-2, 2],
+        zRange: [-30, 0]
+    },
+    FR: {  // Forward right. Represents right view completely including + 1/2y and -1/2y above and below
+        xRange: [0, 15],
+        yRange: [-2, 2],
+        zRange: [-30, 0]
+    },
+    BL: {  // Backward left. Represents behind right left completely including + 1/2y and -1/2y above and below
+        xRange: [-15, 0],
+        yRange: [-2, 2],
+        zRange: [0, 30]
+    },
+    BR: {  // Backward right. Represents behind right view completely including + 1/2y and -1/2y above and below
+        xRange: [0, 15],
+        yRange: [-2, 2],
+        zRange: [0, 30]
+    },
+}
 
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
