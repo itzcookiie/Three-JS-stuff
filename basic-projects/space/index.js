@@ -14,9 +14,16 @@ const DECELERATION = 10.0;
 
 const CAMERA_Z = 0;  // -15 is threshold point
 
-const xRange = [-15, 0];
-const yRange = [-2, 2];
-const zRange = [-30, 0];
+const xRangeStart = -250;
+const xRangeDiff = 500;
+const yRangeStart = -250;
+const yRangeDiff = 500;
+const zRangeStart = -250;
+const zRangeDiff = 250;
+
+const xThreshold = createAxisThreshold(xRangeStart, xRangeDiff);
+const yThreshold = createAxisThreshold(yRangeStart, yRangeDiff);
+const zThreshold = createAxisThreshold(zRangeStart, zRangeDiff);
 
 const area = {  // Use for calculating threshold points to detect when to create new objects on screen
     FL: {  // Forward left. Represents left view completely including + 1/2y and -1/2y above and below
@@ -135,9 +142,6 @@ function animateHOF(scene, camera, renderer, cubeObj, controls) {
             camera.translateZ(  velocity.z * delta );
             camera.translateX( - velocity.x * delta );
 
-            // controls.moveRight( - velocity.x * delta );
-            // controls.moveForward( - velocity.z * delta );
-
         }
 
         // cubeObj.cubes.forEach(cube => {
@@ -181,20 +185,39 @@ function createCubeObj(scene) {
 
 function generateCubes(cubeObj) {
     Array(CUBES_NUMBER).fill(undefined).forEach((_, i) => {
-        const x = getRandomNumberFromArr(xRange);
-        const y = getRandomNumberFromArr(yRange);
-        const z = getRandomNumberFromArr(zRange);
+        const x = getRandomNumberFromArr(createXRange(xRangeStart));
+        const y = getRandomNumberFromArr(createYRange(yRangeStart));
+        const z = getRandomNumberFromArr(createZRange(zRangeStart));
         cubeObj.createCube(x, y, z);
     });
 }
 
 function generateCubesNTimes(cubeObj, n) {
     Array(n).fill(undefined).forEach((_, i) => {
-        const x = getRandomNumberFromArr(xRange);
-        const y = getRandomNumberFromArr(yRange);
-        const z = getRandomNumberFromArr(zRange);
+        const x = getRandomNumberFromArr(createXRange(xRangeStart));
+        const y = getRandomNumberFromArr(createYRange(yRangeStart));
+        const z = getRandomNumberFromArr(createZRange(zRangeStart));
         cubeObj.createCube(x, y, z);
     });
+}
+
+function createAxisThreshold(start, diff) {
+    const halfDiff = diff / 2;
+    return [start - halfDiff, start + halfDiff, start + diff + halfDiff];  // [-ve threshold, curr threshold, +ve threshold]
+}
+
+function createAxisRange(start, diff) {
+    return [start, start + diff]
+}
+
+function createXRange(start) {
+    return createAxisRange(start, xRangeDiff)
+}
+function createYRange(start) {
+    return createAxisRange(start, yRangeDiff)
+}
+function createZRange(start) {
+    return createAxisRange(start, zRangeDiff)
 }
 
 function getRandomNumberFromArr([x, y]) {
