@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 
+const highestAngle = 57.29577951308232;
 
 const CUBE_COLOR = 0xFFFFFF; // white
 const CUBE_CONSTANT = 0.1;
@@ -12,18 +13,28 @@ const CUBES_NUMBER = 10;
 const ACCELERATION = 100.0;
 const DECELERATION = 10.0;
 
-const CAMERA_Z = 0;  // -15 is threshold point
+const CAMERA_Z = 200;  // -15 is threshold point
 
-const xRangeStart = -250;
-const xRangeDiff = 500;
-const yRangeStart = -250;
-const yRangeDiff = 500;
+const velocity = new THREE.Vector3();
+const direction = new THREE.Vector3();
+const angle = new THREE.Vector3();
+let position;
+const vector = new THREE.Vector3();
+
+let time = null;
+
+const xRangeStart = -50;
+const xRangeDiff = 100;
+const yRangeStart = -50;
+const yRangeDiff = 100;
 const zRangeStart = -250;
 const zRangeDiff = 250;
 
-const xThreshold = createAxisThreshold(xRangeStart, xRangeDiff);
-const yThreshold = createAxisThreshold(yRangeStart, yRangeDiff);
-const zThreshold = createAxisThreshold(zRangeStart, zRangeDiff);
+const thresholdPoints = {
+    x: createAxisThresholdPoints(xRangeStart, xRangeDiff),
+    y: createAxisThresholdPoints(yRangeStart, yRangeDiff),
+    z: createAxisThresholdPoints(zRangeStart, zRangeDiff)
+}
 
 const area = {  // Use for calculating threshold points to detect when to create new objects on screen
     FL: {  // Forward left. Represents left view completely including + 1/2y and -1/2y above and below
@@ -47,11 +58,6 @@ const area = {  // Use for calculating threshold points to detect when to create
         zRange: [0, 30]
     },
 }
-
-const velocity = new THREE.Vector3();
-const direction = new THREE.Vector3();
-
-let time = null;
 
 const moveConstants = {
     left: 'left',
@@ -99,7 +105,7 @@ function main() {
     const controls = new PointerLockControls(camera, document.body);
 
     const cubeObj = createCubeObj(scene);
-    generateCubesNTimes(cubeObj, 2000);
+    generateCubesNTimes(cubeObj, 10000);
 
     // setInterval(() => generateCubes(), 2000);
 
@@ -125,6 +131,41 @@ main();
 function animateHOF(scene, camera, renderer, cubeObj, controls) {
     return function animate(timestamp) {
         requestAnimationFrame( animate );
+        position = camera.position;
+        // controls.getDirection(angle);
+        // camera.getWorldDirection(vector);
+        // angle.x = THREE.Math.radToDeg(Math.atan2(vector.x, vector.z)) + 180;
+        // angle.y = THREE.Math.radToDeg(Math.atan2(vector.z, vector.y));
+        // console.log(angle)
+        // angle.x = THREE.Math.radToDeg(camera.rotation.y);
+        // angle.y = THREE.Math.radToDeg(camera.rotation.x);
+
+
+        const [minX, maxX] = thresholdPoints.x;
+        const [minY, maxY] = thresholdPoints.y;
+        const [minZ, maxZ] = thresholdPoints.z;
+
+        if (position.x > maxX) {
+            // Move past x max threshold
+        } else if (position.x < minX) {
+            // Move past x min threshold
+        }
+
+        if (position.y > maxY) {
+            // Move past y max threshold
+        } else if (position.y < minY) {
+            // Move past y min threshold
+        }
+
+        if (position.z > maxZ) {
+            // Move past z max threshold
+        } else if (position.z < minZ) {
+            // Move past z min threshold
+        }
+
+        // IDEA: Add all the points we've crossed the axis threshold for into an array
+        // E.g. ['x', 'y']
+        // 
 
         if (time) {
             const delta = (timestamp - time) / 1000;
@@ -201,23 +242,38 @@ function generateCubesNTimes(cubeObj, n) {
     });
 }
 
-function createAxisThreshold(start, diff) {
-    const halfDiff = diff / 2;
-    return [start - halfDiff, start + halfDiff, start + diff + halfDiff];  // [-ve threshold, curr threshold, +ve threshold]
+function updateAxisThreshold(thresholdPoints, diff) {
+    return thresholdPoints.map(thresholdPoint => thresholdPoint + diff);
 }
 
+function detectAxisThresholdToUpdate(axis) {
+    const currentThreshold = thresholdPoints[axis];
+}
+
+function createAxisThresholdPoints(start, diff) {
+    const halfDiff = diff / 2;
+    const quarterDiff = halfDiff / 2;
+    const midPoint = start + halfDiff;
+    return [midPoint - quarterDiff, midPoint + quarterDiff];  // [-ve threshold, +ve threshold]
+}
+
+// function createAxisThresholdPoints(start, diff) {  If we more than one cube present
+//     const halfDiff = diff / 2;
+//     return [start - halfDiff, start + halfDiff, start + diff + halfDiff];  // [-ve threshold, curr threshold, +ve threshold]
+// }
+
 function createAxisRange(start, diff) {
-    return [start, start + diff]
+    return [start, start + diff];
 }
 
 function createXRange(start) {
-    return createAxisRange(start, xRangeDiff)
+    return createAxisRange(start, xRangeDiff);
 }
 function createYRange(start) {
-    return createAxisRange(start, yRangeDiff)
+    return createAxisRange(start, yRangeDiff);
 }
 function createZRange(start) {
-    return createAxisRange(start, zRangeDiff)
+    return createAxisRange(start, zRangeDiff);
 }
 
 function getRandomNumberFromArr([x, y]) {
@@ -226,4 +282,8 @@ function getRandomNumberFromArr([x, y]) {
 
 function getRandomNumber(min, max) {
     return Math.random() * (max - min) + min;
+}
+
+function convertAngleToRatio(angle) {
+    return THREE.Math.radToDeg(angle) / highestAngle
 }
