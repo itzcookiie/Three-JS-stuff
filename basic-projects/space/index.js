@@ -8,7 +8,20 @@ const CUBE_CONSTANT = 0.1;
 const CUBE_WIDTH = CUBE_CONSTANT;
 const CUBE_HEIGHT = CUBE_CONSTANT;
 const CUBE_DEPTH = CUBE_CONSTANT;
-const CUBES_NUMBER = 10;
+const CUBES_NUMBER = 5000;
+const AXIS = {
+    x: 'x',
+    y: 'y',
+    z: 'z',
+    '+z+x': '+z+x',  // [zMax, xMax]
+    '+x-z': '+x-z',  // [zMin, xMax]
+    '-z-x': '-z-x',  // [zMin, xMin]
+    '+z-x': '+z-x',  // [zMax, xMin]
+    '+z+y': '+z+y',  // [zMax, yMax]
+    '+z-y': '+z-y',  // [zMax, yMin]
+    '+y-z': '+y-z',  // [zMin, yMax]
+    '-z-y': '-z-y',  // [zMin, yMin]
+}
 
 const ACCELERATION = 800.0;
 const DECELERATION = 10.0;
@@ -42,18 +55,16 @@ const state = {
         y: createAxisThresholdPoints(yRangeStart, yRangeDiff),
         z: createAxisThresholdPoints(zRangeStart, zRangeDiff)
     }
-};
+}
 
-const thresholdPoints = {
-    x: createAxisThresholdPoints(xRangeStart, xRangeDiff),
-    y: createAxisThresholdPoints(yRangeStart, yRangeDiff),
-    z: createAxisThresholdPoints(zRangeStart, zRangeDiff)
-};
+const updateState = {
+    thresholdPoints: {
+        min: (thresholdAxis, value) => state.thresholdPoints[thresholdAxis][0] = value,
+        max: (thresholdAxis, value) => state.thresholdPoints[thresholdAxis][1] = value,
+    }
+}
 
-const generatedCubesData = [{
-    startPos: startCubeCords,
-    thresholdPoints
-}];
+const generatedCubesData = [createInitialCubeData()];
 
 const area = {  // Use for calculating threshold points to detect when to create new objects on screen
     FL: {  // Forward left. Represents left view completely including + 1/2y and -1/2y above and below
@@ -102,6 +113,9 @@ const keyCodeMapping = {
 };
 
 function handleMovement(e, moveDir) {
+    const currCube = getCurrentCube()[0];
+    if (currCube) console.log(currCube.shortStartPos);
+    console.log(Object.keys(move).filter(_moveDir => move[_moveDir]))
     if(e.type === 'keydown') move[moveDir] = true;
     if(e.type === 'keyup') move[moveDir] = false;
 }
@@ -126,7 +140,7 @@ function main() {
     const controls = new PointerLockControls(camera, document.body);
 
     const cubeObj = createCubeObj(scene);
-    generateCubesNTimes(cubeObj, 10000);
+    generateCubesNTimes(cubeObj, CUBES_NUMBER);
 
     // setInterval(() => generateCubes(), 2000);
 
@@ -156,9 +170,9 @@ function animateHOF(scene, camera, renderer, cubeObj, controls) {
         position = camera.position;
         // console.log(position)
         // controls.getDirection(angle);
-        // camera.getWorldDirection(vector);
-        // angle.x = THREE.Math.radToDeg(Math.atan2(vector.x, vector.z)) + 180;
-        // angle.y = THREE.Math.radToDeg(Math.atan2(vector.z, vector.y));
+        camera.getWorldDirection(vector);
+        angle.x = THREE.Math.radToDeg(Math.atan2(vector.x, vector.z)) + 180;
+        angle.y = THREE.Math.radToDeg(Math.atan2(vector.z, vector.y));
         // console.log(angle)
         // angle.x = THREE.Math.radToDeg(camera.rotation.y);
         // angle.y = THREE.Math.radToDeg(camera.rotation.x);
@@ -169,7 +183,8 @@ function animateHOF(scene, camera, renderer, cubeObj, controls) {
         const [minX, maxX] = state.thresholdPoints.x;
         const [minY, maxY] = state.thresholdPoints.y;
         const [minZ, maxZ] = state.thresholdPoints.z;
-        
+
+
         // TODO: Need to finish off the below code
         //  Where we check what direction we are moving in
         //  Then use the direction as a way to find the threshold point
@@ -177,61 +192,126 @@ function animateHOF(scene, camera, renderer, cubeObj, controls) {
         //  If there isn't any cubes (only the first 1 made upon spawn), then it should use itself as the base
         //  All the code below .e.g position.x > maxM should go within the corresponding direction condition
         //  Whole idea is we calculate the threshold point based on what cube we are currently occupying
-        if (move.forward) {
-            // const a = findAxisThreshold(moveConstants.forward);
-        } else if (move.back) {
-            const a = findAxisThreshold(moveConstants.back);
-            console.log(a)
-        }
+        if (move.forward || move.back) {
+            const yDirection = angle.y / 90;
+            if (yDirection < -1) {  // Travelling down
+                updateState.thresholdPoints.min(AXIS.y, findAxisThreshold(moveConstants.down));
+            } else if (yDirection > -1) {  // Travelling up
+                updateState.thresholdPoints.max(AXIS.y, findAxisThreshold(moveConstants.up));
+            }
 
-        if (move.right) {
-            // const a = findAxisThreshold(moveConstants.right);
+            const currCube = getCurrentCube()[0];
+
+            // TODO: Handle diagonal cube creations
+            //  atm e.g. if we moved forward and right, it would get handled by the front logic since we are doing like
+            //  a state machine kinda logic. So by having conditions for handling movement in 2 directions, we can keep
+            //  the state machine kinda logic and not have to repeat diagonal logic in both direction handling logic.
+            //     2 things left:
+            //     1. Get the latest diagonal positions from state. Will need to add them using the
+            //     createDiagonalThresholdPoints function. And will need to update the findAxisThreshold function to
+            //     handle such diagonals.
+            //     2. Add conditions for handling 2 specific directions using the min, max positions from state to
+            //     compare
+            if (move.forward || move.right) {
+                if (position.x > currCube.thresholdPoints.x[1] || position.z > currCube.thresholdPoints.z[1]) {  // Positive intersection
+                    const [startX, startY, startZ] = currCube.startPos;
+                    const newStartPos = [startX + xRangeDiff, startY, startZ + zRangeDiff];
+
+                    console.log('MAX Z AND MAX X DIAGONAL INTERSECTION !!!')
+                    console.log('newStartPos: ', newStartPos)
+
+                    generatedCubesData.push(createCubeProps(newStartPos));
+                    console.log(generatedCubesData)
+                    generateCubesNTimes(cubeObj, CUBES_NUMBER, ...newStartPos);
+                }
+            }
+
+            if (move.forward) {
+                console.log(position.x, currCube.thresholdPoints.x[1])
+
+                if (position.z < maxZ) {  // Forward is -ve so inverse pos
+                    // Move past z max threshold
+                    console.log('Move past z max threshold');
+                    console.log(position, maxZ)
+                    const newAxisThreshold = calculateNewAxisThreshold(moveConstants.forward, zRangeDiff);
+                    // state.thresholdPoints.z = newAxisThreshold;
+                    const newStartPos = getNewStartPos(moveConstants.forward);
+                    console.log(newStartPos)
+                    generatedCubesData.push(createCubeProps(newStartPos));
+                    generateCubesNTimes(cubeObj, CUBES_NUMBER, ...newStartPos);
+
+                    if (position.x > currCube.thresholdPoints.x[1]) {  // Positive intersection
+                        const [startX, startY, startZ] = currCube.startPos;
+                        const newStartPos = [startX + xRangeDiff, startY, startZ + zRangeDiff];
+
+                        console.log('MAX Z AND MAX X DIAGONAL INTERSECTION !!!')
+                        console.log('newStartPos: ', newStartPos)
+
+                        generatedCubesData.push(createCubeProps(newStartPos));
+                        console.log(generatedCubesData)
+                        generateCubesNTimes(cubeObj, CUBES_NUMBER, ...newStartPos);
+                    }
+                }
+
+                const threshold = findAxisThreshold(moveConstants.forward);
+                updateState.thresholdPoints.max(AXIS.z, threshold);
+                // console.log(generatedCubesData)
+                // console.log(threshold);
+                // console.log(state.thresholdPoints.z);
+            } else {
+                if (position.z > minZ) { // Backwards is +ve so make -ve threshold point positive
+                    // Move past z min threshold
+                    console.log('Move past z min threshold')
+                    const newAxisThreshold = calculateNewAxisThreshold(moveConstants.back, zRangeDiff);
+                    // state.thresholdPoints.z = newAxisThreshold;
+                }
+
+                const threshold = findAxisThreshold(moveConstants.back);
+                updateState.thresholdPoints.min(AXIS.z, threshold)
+            }
+        } else if (move.right) {
+            console.log(position.x, maxX);
+
+            if (position.x > maxX) {
+                // Move past x max threshold
+                console.log('Move past x max threshold')
+                const newAxisThreshold = calculateNewAxisThreshold(moveConstants.right, xRangeDiff);
+                // state.thresholdPoints.x = newAxisThreshold;
+                const newStartPos = getNewStartPos(moveConstants.right);
+                console.log(newStartPos)
+                generatedCubesData.push(createCubeProps(newStartPos));
+                generateCubesNTimes(cubeObj, CUBES_NUMBER, ...newStartPos);
+            }
+
+            const threshold = findAxisThreshold(moveConstants.right);
+            updateState.thresholdPoints.max(AXIS.x, threshold);
         } else if (move.left) {
-            // const a = findAxisThreshold(moveConstants.left);
+            if (position.x < minX) {
+                // Move past x min threshold
+                console.log('Move past x min threshold')
+                const newAxisThreshold = calculateNewAxisThreshold(moveConstants.left, xRangeDiff);
+                // state.thresholdPoints.x = newAxisThreshold;
+            }
+
+            const threshold = findAxisThreshold(moveConstants.left);
+            updateState.thresholdPoints.min(AXIS.x, threshold)
+            console.log()
         }
 
-        if (position.x > maxX) {
-            // Move past x max threshold
-            console.log('Move past x max threshold')
-            const newAxisThreshold = calculateNewAxisThreshold(moveConstants.right, xRangeDiff);
-            state.thresholdPoints.x = newAxisThreshold;
-            const newStartPos = getNewStartPos(moveConstants.right);
-            console.log(newStartPos)
-            generatedCubesData.push(createCubeProps(newStartPos));
-            generateCubesNTimes(cubeObj, 10000, ...newStartPos);
-        } else if (position.x < minX) {
-            // Move past x min threshold
-            console.log('Move past x min threshold')
-            const newAxisThreshold = calculateNewAxisThreshold(moveConstants.left, xRangeDiff);
-            state.thresholdPoints.x = newAxisThreshold;
-        }
 
+
+        // TODO: Move to logic under first TODO.
+        //  Idea is this only gets called when moving up or down
         if (position.y > maxY) {
             // Move past y max threshold
             console.log('Move past y max threshold')
             const newAxisThreshold = calculateNewAxisThreshold(moveConstants.up, yRangeDiff);
-            state.thresholdPoints.y = newAxisThreshold;
+            // state.thresholdPoints.y = newAxisThreshold;
         } else if (position.y < minY) {
             // Move past y min threshold
             console.log('Move past y min threshold')
             const newAxisThreshold = calculateNewAxisThreshold(moveConstants.down, yRangeDiff);
-            state.thresholdPoints.y = newAxisThreshold;
-        }
-
-        if (position.z < maxZ) {  // Forward is -ve so inverse pos
-            // Move past z max threshold
-            console.log('Move past z max threshold')
-            const newAxisThreshold = calculateNewAxisThreshold(moveConstants.forward, zRangeDiff);
-            state.thresholdPoints.z = newAxisThreshold;
-            const newStartPos = getNewStartPos(moveConstants.forward);
-            console.log(newStartPos)
-            generatedCubesData.push(createCubeProps(newStartPos));
-            generateCubesNTimes(cubeObj, 10000,...newStartPos);
-        } else if (position.z > minZ) { // Backwards is +ve so make -ve threshold point positive
-            // Move past z min threshold
-            console.log('Move past z min threshold')
-            const newAxisThreshold = calculateNewAxisThreshold(moveConstants.back, zRangeDiff);
-            state.thresholdPoints.z = newAxisThreshold;
+            // state.thresholdPoints.y = newAxisThreshold;
         }
 
         // IDEA: Add all the points we've crossed the axis threshold for into an array
@@ -313,14 +393,43 @@ function generateCubesNTimes(cubeObj, n, xRange=xRangeStart, yRange=yRangeStart,
     });
 }
 
+function createInitialCubeData() {
+    const thresholdPoints = {
+        x: createAxisThresholdPoints(xRangeStart, xRangeDiff),
+        y: createAxisThresholdPoints(yRangeStart, yRangeDiff),
+        z: createAxisThresholdPoints(zRangeStart, zRangeDiff)
+    };
+
+    return {
+        startPos: startCubeCords,
+        shortStartPos: '000',
+        thresholdPoints: {
+            ...thresholdPoints,
+            ...createDiagonalThresholdPoints(thresholdPoints)
+        }
+    }
+}
+
 function createCubeProps(startPos) {
     const [x,y,z] = startPos;
+    const shortStartPos = {
+        x: (x - xRangeStart) / xRangeDiff,
+        y: (y - yRangeStart) / yRangeDiff,
+        z: (z - zRangeStart) / zRangeDiff,
+    }
+
+    const thresholdPoints = {
+        x: createAxisThresholdPoints(x, xRangeDiff),
+        y: createAxisThresholdPoints(y, yRangeDiff),
+        z: createAxisThresholdPoints(z, zRangeDiff)
+    }
+
     return {
         startPos,
+        shortStartPos: `${shortStartPos.x}${shortStartPos.y}${shortStartPos.z}`,
         thresholdPoints: {
-            x: createAxisThresholdPoints(x, xRangeDiff),
-            y: createAxisThresholdPoints(y, yRangeDiff),
-            z: createAxisThresholdPoints(z, zRangeDiff)
+            ...thresholdPoints,
+            ...createDiagonalThresholdPoints(thresholdPoints)
         }
     }
 }
@@ -329,8 +438,29 @@ function shouldCreateDiagonalCubeObj() {
 
 }
 
+function createDiagonalThresholdPoints({x: [minX, maxX], y: [minY, maxY], z: [backwardZ, forwardZ]}) {
+    return {
+        [getSameSignDiagonal('z', 'y', '+')]: [forwardZ, maxY],  // +z+y
+        [getMixedDiagonal('z', 'y')]: [forwardZ, minY],  // +z-y
+        [getSameSignDiagonal('z', 'y', '-')]: [backwardZ, minY],  // -z-y
+        [getMixedDiagonal('y', 'z')]: [maxY, backwardZ],  // +y-z
+        [getSameSignDiagonal('z', 'x', '+')]: [forwardZ, maxX],  // +z+x
+        [getMixedDiagonal('z', 'x')]: [forwardZ, minX],  // +z-x
+        [getSameSignDiagonal('z', 'x', '-')]: [backwardZ, minX],  // +x-z
+        [getMixedDiagonal('x', 'z')]: [maxX, backwardZ]  // -z-x
+    }
+}
+
+function getSameSignDiagonal(axis1, axis2, sign) {
+    return AXIS[`${sign}${axis1}${sign}${axis2}`]  // E.g. AXIS[+z+x]
+}
+
+function getMixedDiagonal(axis1, axis2) {
+    return AXIS[`+${axis1}-${axis2}`]  // E.g. AXIS[+z-x]
+}
+
 function getNewStartPos(direction) {  // For finding cords to generate new cube from
-    const lastStartPos = generatedCubesData.at(-1).startPos;
+    const lastStartPos = getCurrentCube()[0].startPos;
     const [x, y, z] = [...lastStartPos];
     if (direction === moveConstants.forward) return [x, y, z + zRangeDiff];
     if (direction === moveConstants.back) return [x, y, z - zRangeDiff];
@@ -338,6 +468,10 @@ function getNewStartPos(direction) {  // For finding cords to generate new cube 
     if (direction === moveConstants.down) return [x, y - yRangeDiff, z];
     if (direction === moveConstants.right) return [x + xRangeDiff, y, z];
     if (direction === moveConstants.left) return [x - xRangeDiff, y, z];
+}
+
+function getDiagonalNewStartPos(x, y, z) {
+
 }
 
 function getCurrentCube() {
@@ -353,7 +487,6 @@ function getCurrentCube() {
 function findAxisThreshold(direction) {
     const currCube = getCurrentCube();
     const cubeObjsInSameAlignment = findCubeObjsInSameAlignment(currCube[0], direction);
-    console.log(cubeObjsInSameAlignment)
     if (cubeObjsInSameAlignment.length) {
         const furthestCubeObj = findFurthestCubeObj(cubeObjsInSameAlignment, direction);
         const {x: [minX, maxX], y: [minY, maxY], z: [backwardZ, forwardZ]} = furthestCubeObj.thresholdPoints;
@@ -400,7 +533,7 @@ function findFurthestCubeObj(cubes, direction) {
     if (direction === moveConstants.down) copy.sort((cubeA, cubeB) => cubeB.startPos[1] - cubeA.startPos[1]);  // Sort in descending order: last item = most -ve number
     if (direction === moveConstants.forward) copy.sort((cubeA, cubeB) => cubeB.startPos[2] - cubeA.startPos[2]);  // Sort in descending order: last item = most -ve number
     if (direction === moveConstants.back) copy.sort((cubeA, cubeB) => cubeA.startPos[2] - cubeB.startPos[2]);  // Sort in ascending order: last item = most +ve number
-    return copy[0];
+    return copy.at(-1);
 }
 
 function calculateNewAxisThreshold(direction, diff=500) {
