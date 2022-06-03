@@ -10,14 +10,8 @@ const CUBE_HEIGHT = CUBE_CONSTANT;
 const CUBE_DEPTH = CUBE_CONSTANT;
 const CUBES_NUMBER = 10;
 
-const ACCELERATION = 500.0;
+const ACCELERATION = 800.0;
 const DECELERATION = 10.0;
-
-const CAMERA_POS = {
-    x: 0,
-    y: 0,
-    z: 0
-}
 
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
@@ -31,10 +25,24 @@ const xRangeStart = -250;
 const xRangeDiff = 500;
 const yRangeStart = -250;
 const yRangeDiff = 500;
-const zRangeStart = -250;
-const zRangeDiff = 500;
+const zRangeStart = 250;
+const zRangeDiff = -500;
+
+const CAMERA_POS = {
+    x: 0,
+    y: 0,
+    z: zRangeStart
+}
 
 const startCubeCords = [xRangeStart, yRangeStart, zRangeStart];
+
+const state = {
+    thresholdPoints: {
+        x: createAxisThresholdPoints(xRangeStart, xRangeDiff),
+        y: createAxisThresholdPoints(yRangeStart, yRangeDiff),
+        z: createAxisThresholdPoints(zRangeStart, zRangeDiff)
+    }
+};
 
 const thresholdPoints = {
     x: createAxisThresholdPoints(xRangeStart, xRangeDiff),
@@ -144,7 +152,9 @@ main();
 function animateHOF(scene, camera, renderer, cubeObj, controls) {
     return function animate(timestamp) {
         requestAnimationFrame( animate );
+        camera.updateMatrixWorld();
         position = camera.position;
+        // console.log(position)
         // controls.getDirection(angle);
         // camera.getWorldDirection(vector);
         // angle.x = THREE.Math.radToDeg(Math.atan2(vector.x, vector.z)) + 180;
@@ -153,48 +163,75 @@ function animateHOF(scene, camera, renderer, cubeObj, controls) {
         // angle.x = THREE.Math.radToDeg(camera.rotation.y);
         // angle.y = THREE.Math.radToDeg(camera.rotation.x);
 
+        // console.log(getCurrentCube())
 
-        const [minX, maxX] = thresholdPoints.x;
-        const [minY, maxY] = thresholdPoints.y;
-        const [minZ, maxZ] = thresholdPoints.z;
+
+        const [minX, maxX] = state.thresholdPoints.x;
+        const [minY, maxY] = state.thresholdPoints.y;
+        const [minZ, maxZ] = state.thresholdPoints.z;
+        
+        // TODO: Need to finish off the below code
+        //  Where we check what direction we are moving in
+        //  Then use the direction as a way to find the threshold point
+        //  E.g. finding the cube most ahead/behind and using the start cords to find the threshold point
+        //  If there isn't any cubes (only the first 1 made upon spawn), then it should use itself as the base
+        //  All the code below .e.g position.x > maxM should go within the corresponding direction condition
+        //  Whole idea is we calculate the threshold point based on what cube we are currently occupying
+        if (move.forward) {
+            // const a = findAxisThreshold(moveConstants.forward);
+        } else if (move.back) {
+            const a = findAxisThreshold(moveConstants.back);
+            console.log(a)
+        }
+
+        if (move.right) {
+            // const a = findAxisThreshold(moveConstants.right);
+        } else if (move.left) {
+            // const a = findAxisThreshold(moveConstants.left);
+        }
 
         if (position.x > maxX) {
             // Move past x max threshold
             console.log('Move past x max threshold')
             const newAxisThreshold = calculateNewAxisThreshold(moveConstants.right, xRangeDiff);
-            thresholdPoints.x = newAxisThreshold;
+            state.thresholdPoints.x = newAxisThreshold;
+            const newStartPos = getNewStartPos(moveConstants.right);
+            console.log(newStartPos)
+            generatedCubesData.push(createCubeProps(newStartPos));
+            generateCubesNTimes(cubeObj, 10000, ...newStartPos);
         } else if (position.x < minX) {
             // Move past x min threshold
             console.log('Move past x min threshold')
             const newAxisThreshold = calculateNewAxisThreshold(moveConstants.left, xRangeDiff);
-            thresholdPoints.x = newAxisThreshold;
+            state.thresholdPoints.x = newAxisThreshold;
         }
 
         if (position.y > maxY) {
             // Move past y max threshold
             console.log('Move past y max threshold')
             const newAxisThreshold = calculateNewAxisThreshold(moveConstants.up, yRangeDiff);
-            thresholdPoints.y = newAxisThreshold;
+            state.thresholdPoints.y = newAxisThreshold;
         } else if (position.y < minY) {
             // Move past y min threshold
             console.log('Move past y min threshold')
             const newAxisThreshold = calculateNewAxisThreshold(moveConstants.down, yRangeDiff);
-            thresholdPoints.y = newAxisThreshold;
+            state.thresholdPoints.y = newAxisThreshold;
         }
 
-        if (-position.z > maxZ) {  // Forward is -ve so inverse pos
+        if (position.z < maxZ) {  // Forward is -ve so inverse pos
             // Move past z max threshold
             console.log('Move past z max threshold')
             const newAxisThreshold = calculateNewAxisThreshold(moveConstants.forward, zRangeDiff);
-            thresholdPoints.z = newAxisThreshold;
+            state.thresholdPoints.z = newAxisThreshold;
             const newStartPos = getNewStartPos(moveConstants.forward);
+            console.log(newStartPos)
             generatedCubesData.push(createCubeProps(newStartPos));
-            generateCubesNTimes(cubeObj, 10000, ...newStartPos);
-        } else if (position.z > -minZ) { // Backwards is +ve so make -ve threshold point positive
+            generateCubesNTimes(cubeObj, 10000,...newStartPos);
+        } else if (position.z > minZ) { // Backwards is +ve so make -ve threshold point positive
             // Move past z min threshold
             console.log('Move past z min threshold')
             const newAxisThreshold = calculateNewAxisThreshold(moveConstants.back, zRangeDiff);
-            thresholdPoints.z = newAxisThreshold;
+            state.thresholdPoints.z = newAxisThreshold;
         }
 
         // IDEA: Add all the points we've crossed the axis threshold for into an array
@@ -277,12 +314,13 @@ function generateCubesNTimes(cubeObj, n, xRange=xRangeStart, yRange=yRangeStart,
 }
 
 function createCubeProps(startPos) {
+    const [x,y,z] = startPos;
     return {
-        startCords: startPos,
-        thresholds: {
-            x: createAxisThresholdPoints(startPos.x, xRangeDiff),
-            y: createAxisThresholdPoints(startPos.y, yRangeDiff),
-            z: createAxisThresholdPoints(startPos.z, zRangeDiff)
+        startPos,
+        thresholdPoints: {
+            x: createAxisThresholdPoints(x, xRangeDiff),
+            y: createAxisThresholdPoints(y, yRangeDiff),
+            z: createAxisThresholdPoints(z, zRangeDiff)
         }
     }
 }
@@ -293,48 +331,76 @@ function shouldCreateDiagonalCubeObj() {
 
 function getNewStartPos(direction) {  // For finding cords to generate new cube from
     const lastStartPos = generatedCubesData.at(-1).startPos;
-    let [x, y, z] = [...lastStartPos];
-    if (direction === moveConstants.forward) z -= zRangeDiff;
-    if (direction === moveConstants.back) z += zRangeDiff;
-    if (direction === moveConstants.up) y += yRangeDiff;
-    if (direction === moveConstants.down) y -= yRangeDiff;
-    if (direction === moveConstants.right) x += xRangeDiff;
-    if (direction === moveConstants.left) x -= xRangeDiff;
-    return [x, y, z];
+    const [x, y, z] = [...lastStartPos];
+    if (direction === moveConstants.forward) return [x, y, z + zRangeDiff];
+    if (direction === moveConstants.back) return [x, y, z - zRangeDiff];
+    if (direction === moveConstants.up) return [x, y + yRangeDiff, z];
+    if (direction === moveConstants.down) return [x, y - yRangeDiff, z];
+    if (direction === moveConstants.right) return [x + xRangeDiff, y, z];
+    if (direction === moveConstants.left) return [x - xRangeDiff, y, z];
+}
+
+function getCurrentCube() {
+    return generatedCubesData.filter(generatedCube => {
+        const [x, y, z] = generatedCube.startPos;
+        const [xMin, xMax] = createXRange(x);
+        const [yMin, yMax] = createYRange(y);
+        const [zMin, zMax] = createZRange(z);
+        return position.x >= xMin && position.x <= xMax && position.y >= yMin && position.y <= yMax && position.z >= zMax && position.z <= zMin;
+    })
 }
 
 function findAxisThreshold(direction) {
-    if (direction === moveConstants.back) {
-
+    const currCube = getCurrentCube();
+    const cubeObjsInSameAlignment = findCubeObjsInSameAlignment(currCube[0], direction);
+    console.log(cubeObjsInSameAlignment)
+    if (cubeObjsInSameAlignment.length) {
+        const furthestCubeObj = findFurthestCubeObj(cubeObjsInSameAlignment, direction);
+        const {x: [minX, maxX], y: [minY, maxY], z: [backwardZ, forwardZ]} = furthestCubeObj.thresholdPoints;
+        if (direction === moveConstants.left) return minX;
+        if (direction === moveConstants.right) return maxX;
+        if (direction === moveConstants.up) return maxY;
+        if (direction === moveConstants.down) return minY;
+        if (direction === moveConstants.forward) return forwardZ;
+        if (direction === moveConstants.back) return backwardZ;
     }
 }
 
-function findCubeObjsInSameAlignment(currCube, direction) {
-    if (direction === moveConstants.forward || direction === moveConstants.back) return findCubeObjsInSameZAxis(currCube, direction);
-    if (direction === moveConstants.right || direction === moveConstants.left) return findCubeObjsInSameXAxis(currCube, direction);
-    if (direction === moveConstants.up || direction === moveConstants.down) return findCubeObjsInSameYAxis(currCube, direction);
+function findCubeObjsInSameAlignment({ startPos }, direction) {
+    if (direction === moveConstants.forward || direction === moveConstants.back) return findCubeObjsInSameZAxis(startPos, direction);
+    if (direction === moveConstants.right || direction === moveConstants.left) return findCubeObjsInSameXAxis(startPos, direction);
+    if (direction === moveConstants.up || direction === moveConstants.down) return findCubeObjsInSameYAxis(startPos, direction);
 }
 
-// TODO: Find all the cubes within the same axis for x,y,z
-//  So we can know e.g. if we are moving backwards, what cubes are behind us
-//  With this we can calculate the next threshold point and know whether to create new space or whether space there
-//  already exists (i.e. we've passed there already)
-function findCubeObjsInSameXAxis(currCube, direction) {
+function findCubeObjsInSameXAxis([x, y, z], direction) {
     return direction === moveConstants.right
-        ? generatedCubesData.filter(generatedCube => generatedCube.startPos.x > currCube.x && generatedCube.startPos.y === currCube.y && generatedCube.startPos.z === currCube.z)
-        : generatedCubesData.filter(generatedCube => generatedCube.startPos.x < currCube.x && generatedCube.startPos.y === currCube.y && generatedCube.startPos.z === currCube.z);
+        ? generatedCubesData.filter(generatedCube => generatedCube.startPos[0] >= x && generatedCube.startPos[1] === y && generatedCube.startPos[2] === z)
+        : generatedCubesData.filter(generatedCube => generatedCube.startPos[0] <= x && generatedCube.startPos[1] === y && generatedCube.startPos[2] === z);
 }
 
-function findCubeObjsInSameYAxis(currCube, direction) {
+function findCubeObjsInSameYAxis([x, y, z], direction) {
     return direction === moveConstants.up
-        ? generatedCubesData.filter(generatedCube => generatedCube.startPos.x === currCube.x && generatedCube.startPos.y > currCube.y && generatedCube.startPos.z === currCube.z)
-        : generatedCubesData.filter(generatedCube => generatedCube.startPos.x === currCube.x && generatedCube.startPos.y < currCube.y && generatedCube.startPos.z === currCube.z);
+        ? generatedCubesData.filter(generatedCube => generatedCube.startPos[0] === x && generatedCube.startPos[1] >= y && generatedCube.startPos[2] === z)
+        : generatedCubesData.filter(generatedCube => generatedCube.startPos[0] === x && generatedCube.startPos[1] <= y && generatedCube.startPos[2] === z);
 }
 
-function findCubeObjsInSameZAxis(currCube, direction) {
+function findCubeObjsInSameZAxis([x, y, z], direction) {
     return direction === moveConstants.forward
-        ? generatedCubesData.filter(generatedCube => generatedCube.startPos.x === currCube.x && generatedCube.startPos.y === currCube.y && generatedCube.startPos.z < currCube.z)
-        : generatedCubesData.filter(generatedCube => generatedCube.startPos.x === currCube.x && generatedCube.startPos.y === currCube.y && generatedCube.startPos.z > currCube.z);
+        ? generatedCubesData.filter(generatedCube => generatedCube.startPos[0] === x && generatedCube.startPos[1] === y && generatedCube.startPos[2] <= z)
+        : generatedCubesData.filter(generatedCube => generatedCube.startPos[0] === x && generatedCube.startPos[1] === y && generatedCube.startPos[2] >= z);
+}
+
+// Gets the cube furthest away from curr obj
+// e.g. if we have 3 cubes created in front of us and we are moving forward, it will find the cube obj most ahead i.e. the 3rd cube ahead
+function findFurthestCubeObj(cubes, direction) {
+    const copy = [...cubes];
+    if (direction === moveConstants.right) copy.sort((cubeA, cubeB) => cubeA.startPos[0] - cubeB.startPos[0]);  // Sort in ascending order: last item = most +ve number
+    if (direction === moveConstants.left) copy.sort((cubeA, cubeB) => cubeB.startPos[0] - cubeA.startPos[0]);  // Sort in descending order: last item = most -ve number
+    if (direction === moveConstants.up) copy.sort((cubeA, cubeB) => cubeA.startPos[1] - cubeB.startPos[1]);  // Sort in ascending order: last item = most +ve number
+    if (direction === moveConstants.down) copy.sort((cubeA, cubeB) => cubeB.startPos[1] - cubeA.startPos[1]);  // Sort in descending order: last item = most -ve number
+    if (direction === moveConstants.forward) copy.sort((cubeA, cubeB) => cubeB.startPos[2] - cubeA.startPos[2]);  // Sort in descending order: last item = most -ve number
+    if (direction === moveConstants.back) copy.sort((cubeA, cubeB) => cubeA.startPos[2] - cubeB.startPos[2]);  // Sort in ascending order: last item = most +ve number
+    return copy[0];
 }
 
 function calculateNewAxisThreshold(direction, diff=500) {
@@ -345,9 +411,9 @@ function calculateNewAxisThreshold(direction, diff=500) {
     const positiveDirection = [zAxis[0], yAxis[0], xAxis[0]];
 
     let thresholdPoint;
-    if (zAxis.includes(direction)) thresholdPoint = thresholdPoints.z;
-    if (yAxis.includes(direction)) thresholdPoint = thresholdPoints.y;
-    if (xAxis.includes(direction)) thresholdPoint = thresholdPoints.x;
+    if (zAxis.includes(direction)) thresholdPoint = state.thresholdPoints.z;
+    if (yAxis.includes(direction)) thresholdPoint = state.thresholdPoints.y;
+    if (xAxis.includes(direction)) thresholdPoint = state.thresholdPoints.x;
 
     const thresholdPointCopy = [...thresholdPoint];
     positiveDirection.includes(direction) ? thresholdPointCopy[1] += diff : thresholdPointCopy[0] -= diff;
