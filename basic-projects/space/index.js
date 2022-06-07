@@ -102,7 +102,9 @@ const move = {
     left: false,
     right: false,
     forward: false,
-    back: false
+    back: false,
+    up: false,
+    down: false
 };
 
 const keyCodeMapping = {
@@ -171,9 +173,9 @@ function animateHOF(scene, camera, renderer, cubeObj, controls) {
         // console.log(position)
         // controls.getDirection(angle);
         camera.getWorldDirection(vector);
-        angle.x = THREE.Math.radToDeg(Math.atan2(vector.x, vector.z)) + 180;
+        angle.x = THREE.Math.radToDeg(Math.atan2(vector.x, vector.z));
         angle.y = THREE.Math.radToDeg(Math.atan2(vector.z, vector.y));
-        // console.log(angle)
+        // console.log(angle.x)
         // angle.x = THREE.Math.radToDeg(camera.rotation.y);
         // angle.y = THREE.Math.radToDeg(camera.rotation.x);
 
@@ -196,9 +198,16 @@ function animateHOF(scene, camera, renderer, cubeObj, controls) {
             const yDirection = angle.y / 90;
             if (yDirection < -1) {  // Travelling down
                 updateState.thresholdPoints.min(AXIS.y, findAxisThreshold(moveConstants.down));
+                move[moveConstants.down] = true;
             } else if (yDirection > -1) {  // Travelling up
                 updateState.thresholdPoints.max(AXIS.y, findAxisThreshold(moveConstants.up));
+                move[moveConstants.up] = true;
+            } else {
+                move[moveConstants.up] = false;
+                move[moveConstants.down] = false;
             }
+
+            // const xDirection
 
             const currCube = getCurrentCube()[0];
 
@@ -212,22 +221,30 @@ function animateHOF(scene, camera, renderer, cubeObj, controls) {
             //     handle such diagonals.
             //     2. Add conditions for handling 2 specific directions using the min, max positions from state to
             //     compare
-            if (move.forward || move.right) {
-                if (position.x > currCube.thresholdPoints.x[1] || position.z > currCube.thresholdPoints.z[1]) {  // Positive intersection
-                    const [startX, startY, startZ] = currCube.startPos;
-                    const newStartPos = [startX + xRangeDiff, startY, startZ + zRangeDiff];
-
-                    console.log('MAX Z AND MAX X DIAGONAL INTERSECTION !!!')
-                    console.log('newStartPos: ', newStartPos)
-
-                    generatedCubesData.push(createCubeProps(newStartPos));
-                    console.log(generatedCubesData)
-                    generateCubesNTimes(cubeObj, CUBES_NUMBER, ...newStartPos);
-                }
-            }
+            //   Implementation:
+            //   - Handle setting the right threshold points for the right axis depending on what direction we are moving
+            //   (look at line 524)
+            //   - Create an object that maps different x angles to different quadrants e.g. NE, NW etc
+            //   - Create a function that finds the current direction we are facing and sets the xDirection
+            //   to the correct mapping
+            //   - Use the current xDirection for getting the right directions to use in findAxisThreshold function
+            // if (move.forward || move.right) {
+            //     if (position.x > currCube.thresholdPoints.x[1] && position.z > currCube.thresholdPoints.z[1]) {  // Positive intersection
+            //         const [startX, startY, startZ] = currCube.startPos;
+            //         const newStartPos = [startX + xRangeDiff, startY, startZ + zRangeDiff];
+            //
+            //         console.log('MAX Z AND MAX X DIAGONAL INTERSECTION !!!')
+            //         console.log('newStartPos: ', newStartPos)
+            //
+            //         generatedCubesData.push(createCubeProps(newStartPos));
+            //         console.log(generatedCubesData)
+            //         generateCubesNTimes(cubeObj, CUBES_NUMBER, ...newStartPos);
+            //     }
+            // }
 
             if (move.forward) {
                 console.log(position.x, currCube.thresholdPoints.x[1])
+                console.log(generatedCubesData)
 
                 if (position.z < maxZ) {  // Forward is -ve so inverse pos
                     // Move past z max threshold
@@ -499,10 +516,55 @@ function findAxisThreshold(direction) {
     }
 }
 
+function findAxisThresholdDiagonal(direction) {
+    const currCube = getCurrentCube();
+    const cubeObjsInSameAlignment = findCubeObjsInSameAlignmentDiagonal(currCube[0], direction);
+    if (cubeObjsInSameAlignment.length) {
+        const furthestCubeObj = findFurthestCubeObj(cubeObjsInSameAlignment, direction);
+        const {x: [minX, maxX], y: [minY, maxY], z: [backwardZ, forwardZ]} = furthestCubeObj.thresholdPoints;
+        if (direction === moveConstants.left) return minX;
+        if (direction === moveConstants.right) return maxX;
+        if (direction === moveConstants.up) return maxY;
+        if (direction === moveConstants.down) return minY;
+        if (direction === moveConstants.forward) return forwardZ;
+        if (direction === moveConstants.back) return backwardZ;
+    }
+}
+
 function findCubeObjsInSameAlignment({ startPos }, direction) {
     if (direction === moveConstants.forward || direction === moveConstants.back) return findCubeObjsInSameZAxis(startPos, direction);
     if (direction === moveConstants.right || direction === moveConstants.left) return findCubeObjsInSameXAxis(startPos, direction);
     if (direction === moveConstants.up || direction === moveConstants.down) return findCubeObjsInSameYAxis(startPos, direction);
+}
+
+function findCubeObjsInSameAlignmentDiagonal({ startPos }, directions) {
+    if(directions.includes(moveConstants.up) || directions.includes(moveConstants.down)) {
+        return findCubeObjsInSameYXAxis(startPos, directions);
+    } else if (directions.includes(moveConstants.forward) || directions.includes(moveConstants.back)) {
+        return findCubeObjsInSameZXAxis(startPos, directions);
+    }
+}
+
+function findCubeObjsInSameZXAxis([x, y, z], directions) {
+    return generatedCubesData.filter(generatedCube => generatedCube.startPos[1] === y
+        && directions.includes(moveConstants.right) ? generatedCube.startPos[0] >= x : generatedCube.startPos[0] <= x
+        && directions.includes(moveConstants.forward) ? generatedCube.startPos[2] >= z : generatedCube.startPos[2] <= z
+        &&((generatedCube.startPos[0] / xRangeDiff) / (generatedCube.startPos[2] / zRangeDiff)) === ((xRangeStart / xRangeDiff) / (zRangeStart / zRangeDiff)));
+}
+
+function findCubeObjsInSameYXAxis([x, y, z], directions) {
+    return generatedCubesData.filter(generatedCube =>
+        directions.includes(moveConstants.up) ? generatedCube.startPos[1] >= y : generatedCube.startPos[1] <= y
+        && directions.includes(moveConstants.right) ? generatedCube.startPos[0] >= x : generatedCube.startPos[0] <= x
+        && directions.includes(moveConstants.forward) ? generatedCube.startPos[2] >= z : generatedCube.startPos[2] <= z
+        &&((generatedCube.startPos[0] / xRangeDiff) / (generatedCube.startPos[2] / zRangeDiff)) === ((xRangeStart / xRangeDiff) / (zRangeStart / zRangeDiff)));
+}
+
+function findCubeObjsInSameBackDiagonalAxis([x, y, z], directions) {
+    return generatedCubesData.filter(generatedCube => generatedCube.startPos[1] === y
+        && directions.includes(moveConstants.right) ? generatedCube.startPos[0] >= x : generatedCube.startPos[0] <= x
+        && generatedCube.startPos[2] <= z  // Moving up
+        &&((generatedCube.startPos[0] / xRangeDiff) / (generatedCube.startPos[2] / zRangeDiff)) === ((xRangeStart / xRangeDiff) / (zRangeStart / zRangeDiff)));
 }
 
 function findCubeObjsInSameXAxis([x, y, z], direction) {
