@@ -101,8 +101,7 @@ function animateHOF(scene, camera, renderer, cubeObj, controls) {
         camera.updateMatrixWorld();
         const position = camera.position;
 
-        const currCube = getCurrentCube(position);
-        state = currCube;
+        state = getCurrentCube(position);;
 
         const [minX, maxX] = state.thresholdPoints.x;
         const [minY, maxY] = state.thresholdPoints.y;
